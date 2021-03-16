@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: weechat-xochimilco
+Upstream-Contact: Alvar Penning <post@0x21.biz>
+Source: https://github.com/oxzi/weechat-xochimilco
+
+Files: README.md go.mod go.sum shell.nix .gitignore .github/workflows/* contrib/nix/*
+Copyright: Alvar Penning
+License: CC0-1.0
+Comment: Those files are secondary; I only want a header within the code.
