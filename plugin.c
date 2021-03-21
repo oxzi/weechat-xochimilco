@@ -57,16 +57,28 @@ char *hook_privmsg_in(const void *pointer, void *data, const char *modifier,
   char *res = malloc(strlen(string)+1);
   strcpy(res, string);
 
+  char *res_empty = malloc(1);
+  strcpy(res_empty, "");
+
   struct xochimilco_recv_return recv = xochimilco_recv((char*) string);
-  if (recv.r2 != NULL) {
-    weechat_printf(buffer, "%sxochimilco: Receiving error, %s", weechat_prefix("error"), recv.r2);
+  if (recv.r5 != NULL) {
+    weechat_printf(buffer, "%sxochimilco: Receiving error, %s", weechat_prefix("error"), recv.r5);
     return res;
-  } else if (recv.r0) {
+  } else if (recv.r0 && recv.r4) {
     weechat_printf(buffer, "%sxochimilco: Acknowledge conversation", weechat_prefix("action"));
-    weechat_command(NULL, recv.r1);
-    return NULL;
-  } else if (!recv.r0 && recv.r1) {
-    return recv.r1;
+    weechat_command(NULL, recv.r4);
+    return res_empty;
+  } else if (!recv.r0 && recv.r4) {
+    return recv.r4;
+  } else if (recv.r1) {
+    weechat_printf(buffer, "%sxochimilco: Conversation established", weechat_prefix("action"));
+    return res_empty;
+  } else if (recv.r2) {
+    weechat_printf(buffer, "%sxochimilco: Peer closed session", weechat_prefix("action"));
+    return res_empty;
+  } else if (recv.r3) {
+    // fragment of an encrypted message
+    return res_empty;
   } else {
     return res;
   }

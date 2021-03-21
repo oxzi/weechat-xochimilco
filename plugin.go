@@ -59,12 +59,14 @@ func xochimilco_start(name_buff *C.char) (msg, err_msg *C.char) {
 }
 
 //export xochimilco_recv
-func xochimilco_recv(privmsg_in *C.char) (is_ack bool, msg_out, err_msg *C.char) {
+func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed, is_fragment bool, msg_out, err_msg *C.char) {
 	parts := strings.Split(C.GoString(privmsg_in), " ")
 	if len(parts) < 4 {
-		return false, nil, C.CString("expected at least 4 parts")
+		err_msg = C.CString("expected at least 4 parts")
+		return
 	} else if parts[1] != "PRIVMSG" {
-		return false, nil, C.CString("expected a PRIVMSG")
+		err_msg = C.CString("expected a PRIVMSG")
+		return
 	}
 
 	name := parts[0]
@@ -72,7 +74,8 @@ func xochimilco_recv(privmsg_in *C.char) (is_ack bool, msg_out, err_msg *C.char)
 
 	re := regexp.MustCompile(`^:(\w+)!.*`)
 	if matches := re.FindStringSubmatch(name); len(matches) != 2 {
-		return false, nil, C.CString("cannot extract nick")
+		err_msg = C.CString("cannot extract nick")
+		return
 	} else {
 		name = matches[1]
 	}
@@ -83,12 +86,13 @@ func xochimilco_recv(privmsg_in *C.char) (is_ack bool, msg_out, err_msg *C.char)
 	}
 
 	if !strings.HasPrefix(input, xochimilco.Prefix) {
-		return false, nil, nil
+		return
 	}
 
 	if !strings.HasSuffix(input, xochimilco.Suffix) {
 		msgAssembly[name] = input
-		return false, nil, nil
+		is_fragment = true
+		return
 	}
 
 	sess, ok := sessions[name]
@@ -103,23 +107,31 @@ func xochimilco_recv(privmsg_in *C.char) (is_ack bool, msg_out, err_msg *C.char)
 
 		ack, err := sess.Acknowledge(input)
 		if err != nil {
-			return false, nil, C.CString(fmt.Sprintf("%v", err))
+			err_msg = C.CString(fmt.Sprintf("%v", err))
+			return
 		} else {
 			sessions[name] = sess
-			return true, C.CString(privmsg(name, ack)), nil
+			has_ack_msg = true
+			msg_out = C.CString(privmsg(name, ack))
+			return
 		}
 	}
 
-	// TODO
-	_, _, plaintext, err := sess.Receive(input)
+	isEstablished, isClosed, plaintext, err := sess.Receive(input)
 	if err != nil {
-		return false, nil, C.CString(fmt.Sprintf("%v", err))
-	} else if plaintext != nil {
-		out := fmt.Sprintf("%s PRIVMSG %s :%s", parts[0], parts[2], plaintext)
-		return false, C.CString(out), nil
+		err_msg = C.CString(fmt.Sprintf("%v", err))
+		return
+	} else if isEstablished {
+		is_established = true
+		return
+	} else if isClosed {
+		defer delete(sessions, name)
+		is_closed = true
+		return
+	} else {
+		msg_out = C.CString(fmt.Sprintf("%s PRIVMSG %s :%s", parts[0], parts[2], plaintext))
+		return
 	}
-
-	return false, nil, nil
 }
 
 //export xochimilco_send
