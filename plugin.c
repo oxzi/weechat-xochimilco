@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <stdlib.h>
 #include <string.h>
 #include "plugin.h"
 #include "weechat-plugin.h"
@@ -21,16 +22,28 @@ int hook_cmd(const void *pointer, void *data, struct t_gui_buffer *buffer,
     return WEECHAT_RC_ERROR;
   }
 
-  if (strcmp("start", argv[1]) == 0) {
-    weechat_printf(buffer, "start: %s", weechat_buffer_get_string(buffer, "name"));
+  const char *buffer_name = weechat_buffer_get_string(buffer, "short_name");
 
-    if (weechat_command(buffer, "hello") != WEECHAT_RC_OK) {
+  if (strcmp("start", argv[1]) == 0) {
+    struct xochimilco_start_return offer = xochimilco_start((char*) buffer_name);
+    if (offer.r1 != NULL) {
+      weechat_printf(buffer, "%sxochimilco: Invalid Offer Message, %s", weechat_prefix("error"), offer.r1);
+      return WEECHAT_RC_ERROR;
+    }
+
+    weechat_printf(buffer, "%sxochimilco: Sending Offer", weechat_prefix("action"));
+    if (weechat_command(buffer, offer.r0) != WEECHAT_RC_OK) {
       return WEECHAT_RC_ERROR;
     }
   } else if (strcmp("stop", argv[1]) == 0) {
-    weechat_printf(buffer, "stop: %s", weechat_buffer_get_string(buffer, "name"));
+    struct xochimilco_stop_return close = xochimilco_stop((char*) buffer_name);
+    if (close.r1 != NULL) {
+      weechat_printf(buffer, "%sxochimilco: Invalid Close Message, %s", weechat_prefix("error"), close.r1);
+      return WEECHAT_RC_ERROR;
+    }
 
-    if (weechat_command(buffer, "bye") != WEECHAT_RC_OK) {
+    weechat_printf(buffer, "%sxochimilco: Sending Close", weechat_prefix("action"));
+    if (weechat_command(buffer, close.r0) != WEECHAT_RC_OK) {
       return WEECHAT_RC_ERROR;
     }
   } else {
@@ -38,23 +51,55 @@ int hook_cmd(const void *pointer, void *data, struct t_gui_buffer *buffer,
     return WEECHAT_RC_ERROR;
   }
 
-  return cmdHandler(buffer, argc, argv);
+  return WEECHAT_RC_OK;
 }
 
-/*
 char *hook_privmsg_in(const void *pointer, void *data, const char *modifier,
                       const char *modifier_data, const char *string) {
-  return NULL;
+  struct t_gui_buffer *buffer = weechat_current_buffer();
+
+  char *res = malloc(strlen(string)+1);
+  strcpy(res, string);
+
+  struct xochimilco_recv_return recv = xochimilco_recv((char*) string);
+  if (recv.r2 != NULL) {
+    weechat_printf(buffer, "%sxochimilco: Receiving error, %s", weechat_prefix("error"), recv.r2);
+    return res;
+  } else if (recv.r0) {
+    weechat_printf(buffer, "%sxochimilco: Acknowledge conversation", weechat_prefix("action"));
+    weechat_command(buffer, recv.r1);
+    return res;
+  } else if (!recv.r0 && recv.r1) {
+    return recv.r1;
+  } else {
+    return res;
+  }
 }
 
 char *hook_privmsg_out(const void *pointer, void *data, const char *modifier,
                        const char *modifier_data, const char *string) {
-  return NULL;
-}
-*/
+  struct t_gui_buffer *buffer = weechat_current_buffer();
 
-int weechat_plugin_init(struct t_weechat_plugin *plugin, int argc,
-                        char *argv[]) {
+  struct xochimilco_send_return send = xochimilco_send((char*) string);
+  if (send.r1 != NULL) {
+    weechat_printf(buffer, "%sxochimilco: Sending error, %s", weechat_prefix("error"), send.r1);
+    return NULL;
+  } else if (send.r0 != NULL) {
+    return send.r0;
+  } else {
+    char *res = malloc(strlen(string)+1);
+    strcpy(res, string);
+    return res;
+  }
+}
+
+int weechat_plugin_init(struct t_weechat_plugin *plugin, int argc, char *argv[]) {
+  char *err_msg;
+  if ((err_msg = xochimilco_init()) != NULL) {
+    weechat_printf(NULL, "%sxochimilco: Initializing failed, %s", weechat_prefix("error"), err_msg);
+    return WEECHAT_RC_ERROR;
+  }
+
   weechat_plugin = plugin;
 
   weechat_hook_command(
@@ -62,8 +107,8 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin, int argc,
       "start %(nick) %(irc_servers) || stop %(nick) %(irc_servers)", &hook_cmd,
       NULL, NULL);
 
-  // weechat_hook_modifier("irc_in2_privmsg", &hook_privmsg_in, NULL, NULL);
-  // weechat_hook_modifier("irc_out1_privmsg", &hook_privmsg_out, NULL, NULL);
+  weechat_hook_modifier("irc_in2_privmsg", &hook_privmsg_in, NULL, NULL);
+  weechat_hook_modifier("irc_out1_privmsg", &hook_privmsg_out, NULL, NULL);
 
   return WEECHAT_RC_OK;
 }

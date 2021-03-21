@@ -5,6 +5,7 @@ pkgs.mkShell {
     clang-tools
     go
     golangci-lint
+    pwgen
     reuse
     weechat
   ];

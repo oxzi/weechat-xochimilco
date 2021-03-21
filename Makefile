@@ -5,7 +5,7 @@
 CC ?= gcc
 GO  = go
 
-.PHONY: install clean
+.PHONY: install test-instance clean
 
 xochimilco.so: plugin.o plugin.a
 	$(CC) -shared -fPIC -Wl,-Bsymbolic -o xochimilco.so plugin.o plugin.a
@@ -18,6 +18,9 @@ plugin.a plugin.h: plugin.go
 
 install: xochimilco.so
 	cp xochimilco.so ~/.weechat/plugins/xochimilco.so
+
+test-instance: xochimilco.so
+	weechat -t -r "/plugin load $(shell pwd)/xochimilco.so;/server add hackint irc.hackint.org/6697 -ssl;/set irc.server.hackint.nicks $(shell pwgen 6 1);/connect hackint"
 
 clean:
 	$(RM) plugin.{a,h,h.gch,o} xochimilco.so
