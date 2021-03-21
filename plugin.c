@@ -61,17 +61,21 @@ char *hook_privmsg_in(const void *pointer, void *data, const char *modifier,
   strcpy(res_empty, "");
 
   struct xochimilco_recv_return recv = xochimilco_recv((char*) string);
-  if (recv.r5 != NULL) {
-    weechat_printf(buffer, "%sxochimilco: Receiving error, %s", weechat_prefix("error"), recv.r5);
+  if (recv.r7 != NULL) {
+    weechat_printf(buffer, "%sxochimilco: Receiving error, %s", weechat_prefix("error"), recv.r7);
     return res;
   } else if (recv.r0 && recv.r4) {
     weechat_printf(buffer, "%sxochimilco: Acknowledge conversation", weechat_prefix("action"));
+    weechat_printf(buffer, "%sxochimilco: Own key:    %s", weechat_prefix("action"), recv.r5);
+    weechat_printf(buffer, "%sxochimilco: Peer's key: %s", weechat_prefix("action"), recv.r6);
     weechat_command(NULL, recv.r4);
     return res_empty;
   } else if (!recv.r0 && recv.r4) {
     return recv.r4;
   } else if (recv.r1) {
     weechat_printf(buffer, "%sxochimilco: Conversation established", weechat_prefix("action"));
+    weechat_printf(buffer, "%sxochimilco: Own key:    %s", weechat_prefix("action"), recv.r5);
+    weechat_printf(buffer, "%sxochimilco: Peer's key: %s", weechat_prefix("action"), recv.r6);
     return res_empty;
   } else if (recv.r2) {
     weechat_printf(buffer, "%sxochimilco: Peer closed session", weechat_prefix("action"));

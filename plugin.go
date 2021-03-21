@@ -8,6 +8,7 @@ import (
 	"C"
 
 	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strings"
@@ -19,11 +20,19 @@ var (
 	identityKey ed25519.PrivateKey
 	sessions    map[string]*xochimilco.Session
 	msgAssembly map[string]string
+	peerPubkey  map[string]string
 )
 
 // privmsg formats an IRC PRIVMSG with WeeChat's /quote command.
 func privmsg(nick, msg string) string {
 	return fmt.Sprintf("/quote PRIVMSG %s :%s", nick, msg)
+}
+
+// delPeer removes state for a closed peer.
+func delPeer(nick string) {
+	delete(sessions, nick)
+	delete(msgAssembly, nick)
+	delete(peerPubkey, nick)
 }
 
 //export xochimilco_init
@@ -36,6 +45,8 @@ func xochimilco_init() *C.char {
 
 	sessions = make(map[string]*xochimilco.Session)
 	msgAssembly = make(map[string]string)
+	peerPubkey = make(map[string]string)
+
 	return nil
 }
 
@@ -46,7 +57,7 @@ func xochimilco_start(name_buff *C.char) (msg, err_msg *C.char) {
 	sessions[name] = &xochimilco.Session{
 		IdentityKey: identityKey,
 		VerifyPeer: func(peer ed25519.PublicKey) (valid bool) {
-			// TODO
+			peerPubkey[name] = base64.StdEncoding.EncodeToString(peer)
 			return true
 		},
 	}
@@ -59,7 +70,7 @@ func xochimilco_start(name_buff *C.char) (msg, err_msg *C.char) {
 }
 
 //export xochimilco_recv
-func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed, is_fragment bool, msg_out, err_msg *C.char) {
+func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed, is_fragment bool, msg_out, key_self, key_peer, err_msg *C.char) {
 	parts := strings.Split(C.GoString(privmsg_in), " ")
 	if len(parts) < 4 {
 		err_msg = C.CString("expected at least 4 parts")
@@ -100,7 +111,7 @@ func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed
 		sess = &xochimilco.Session{
 			IdentityKey: identityKey,
 			VerifyPeer: func(peer ed25519.PublicKey) (valid bool) {
-				// TODO
+				peerPubkey[name] = base64.StdEncoding.EncodeToString(peer)
 				return true
 			},
 		}
@@ -113,6 +124,8 @@ func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed
 			sessions[name] = sess
 			has_ack_msg = true
 			msg_out = C.CString(privmsg(name, ack))
+			key_self = C.CString(base64.StdEncoding.EncodeToString(identityKey.Public().(ed25519.PublicKey)))
+			key_peer = C.CString(peerPubkey[name])
 			return
 		}
 	}
@@ -123,9 +136,11 @@ func xochimilco_recv(privmsg_in *C.char) (has_ack_msg, is_established, is_closed
 		return
 	} else if isEstablished {
 		is_established = true
+		key_self = C.CString(base64.StdEncoding.EncodeToString(identityKey.Public().(ed25519.PublicKey)))
+		key_peer = C.CString(peerPubkey[name])
 		return
 	} else if isClosed {
-		defer delete(sessions, name)
+		defer delPeer(name)
 		is_closed = true
 		return
 	} else {
@@ -171,7 +186,7 @@ func xochimilco_stop(name_buff *C.char) (msg, err_msg *C.char) {
 	if !ok {
 		return nil, C.CString("no such session")
 	}
-	defer delete(sessions, name)
+	defer delPeer(name)
 
 	if msg, err := sess.Close(); err != nil {
 		return nil, C.CString(fmt.Sprintf("%v", err))
