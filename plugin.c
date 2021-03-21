@@ -32,9 +32,7 @@ int hook_cmd(const void *pointer, void *data, struct t_gui_buffer *buffer,
     }
 
     weechat_printf(buffer, "%sxochimilco: Sending Offer", weechat_prefix("action"));
-    if (weechat_command(buffer, offer.r0) != WEECHAT_RC_OK) {
-      return WEECHAT_RC_ERROR;
-    }
+    weechat_command(NULL, offer.r0);
   } else if (strcmp("stop", argv[1]) == 0) {
     struct xochimilco_stop_return close = xochimilco_stop((char*) buffer_name);
     if (close.r1 != NULL) {
@@ -43,9 +41,7 @@ int hook_cmd(const void *pointer, void *data, struct t_gui_buffer *buffer,
     }
 
     weechat_printf(buffer, "%sxochimilco: Sending Close", weechat_prefix("action"));
-    if (weechat_command(buffer, close.r0) != WEECHAT_RC_OK) {
-      return WEECHAT_RC_ERROR;
-    }
+    weechat_command(NULL, close.r0);
   } else {
     weechat_printf(buffer, "%sxochimilco: Unknown argument.", weechat_prefix("error"));
     return WEECHAT_RC_ERROR;
@@ -67,8 +63,8 @@ char *hook_privmsg_in(const void *pointer, void *data, const char *modifier,
     return res;
   } else if (recv.r0) {
     weechat_printf(buffer, "%sxochimilco: Acknowledge conversation", weechat_prefix("action"));
-    weechat_command(buffer, recv.r1);
-    return res;
+    weechat_command(NULL, recv.r1);
+    return NULL;
   } else if (!recv.r0 && recv.r1) {
     return recv.r1;
   } else {
@@ -85,7 +81,16 @@ char *hook_privmsg_out(const void *pointer, void *data, const char *modifier,
     weechat_printf(buffer, "%sxochimilco: Sending error, %s", weechat_prefix("error"), send.r1);
     return NULL;
   } else if (send.r0 != NULL) {
-    return send.r0;
+    weechat_command(NULL, send.r0);
+
+    weechat_printf(buffer, "%s\t%s",
+        weechat_string_eval_expression("${nick}", NULL, NULL, NULL),
+        strchr(string, ':')+1);
+
+    // returning NULL results in a retransmission
+    char *res = malloc(1);
+    strcpy(res, "");
+    return res;
   } else {
     char *res = malloc(strlen(string)+1);
     strcpy(res, string);

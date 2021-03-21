@@ -21,6 +21,11 @@ var (
 	msgAssembly map[string]string
 )
 
+// privmsg formats an IRC PRIVMSG with WeeChat's /quote command.
+func privmsg(nick, msg string) string {
+	return fmt.Sprintf("/quote PRIVMSG %s :%s", nick, msg)
+}
+
 //export xochimilco_init
 func xochimilco_init() *C.char {
 	var err error
@@ -49,7 +54,7 @@ func xochimilco_start(name_buff *C.char) (msg, err_msg *C.char) {
 	if msg, err := sessions[name].Offer(); err != nil {
 		return nil, C.CString(fmt.Sprintf("%v", err))
 	} else {
-		return C.CString(msg), nil
+		return C.CString(privmsg(name, msg)), nil
 	}
 }
 
@@ -101,7 +106,7 @@ func xochimilco_recv(privmsg_in *C.char) (is_ack bool, msg_out, err_msg *C.char)
 			return false, nil, C.CString(fmt.Sprintf("%v", err))
 		} else {
 			sessions[name] = sess
-			return true, C.CString(ack), nil
+			return true, C.CString(privmsg(name, ack)), nil
 		}
 	}
 
@@ -142,7 +147,7 @@ func xochimilco_send(privmsg_in *C.char) (msg_out, err_msg *C.char) {
 	if err != nil {
 		return nil, C.CString(fmt.Sprintf("%v", err))
 	} else {
-		return C.CString(fmt.Sprintf("PRIVMSG %s :%s", name, dataMsg)), nil
+		return C.CString(privmsg(name, dataMsg)), nil
 	}
 }
 
@@ -159,7 +164,7 @@ func xochimilco_stop(name_buff *C.char) (msg, err_msg *C.char) {
 	if msg, err := sess.Close(); err != nil {
 		return nil, C.CString(fmt.Sprintf("%v", err))
 	} else {
-		return C.CString(msg), nil
+		return C.CString(privmsg(name, msg)), nil
 	}
 }
 
